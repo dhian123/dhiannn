@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: sinusa_postgres
+    environment:
+      POSTGRES_DB: sinusa_db
+      POSTGRES_USER: sinusa_user
+      POSTGRES_PASSWORD: sinusa_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sinusa_user -d sinusa_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: sinusa_redis
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sinusa_backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: sinusa_db
+      DB_USER: sinusa_user
+      DB_PASSWORD: sinusa_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      OTP_SECRET: your-otp-secret-key
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web Portal (React)
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: sinusa_web
+    environment:
+      REACT_APP_API_URL: http://localhost:3000/api/v1
+      REACT_APP_WS_URL: ws://localhost:3000/socket.io
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: sinusa_nginx
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./uploads:/var/www/uploads
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - web
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: sinusa_mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+
+  # Adminer for database management
+  adminer:
+    image: adminer:latest
+    container_name: sinusa_adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: sinusa_redis_commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - sinusa_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  sinusa_network:
+    driver: bridge
