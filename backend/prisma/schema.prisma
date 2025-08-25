@@ -1,0 +1,596 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  phone             String   @unique
+  password          String
+  role              UserRole @default(SANTRI)
+  isActive          Boolean  @default(true)
+  isVerified        Boolean  @default(false)
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  santri            Santri?
+  waliSantri        WaliSantri?
+  admin             Admin?
+  finance           Finance?
+  superAdmin        SuperAdmin?
+  sessions          Session[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  feedback          Feedback[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  SANTRI
+  WALI_SANTRI
+  ADMIN
+  FINANCE
+  SUPER_ADMIN
+}
+
+// Session Management
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  deviceInfo   String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Santri Management
+model Santri {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  nis             String   @unique // Nomor Induk Santri
+  name            String
+  birthPlace      String
+  birthDate       Date
+  gender          Gender
+  address         String
+  parentName      String
+  parentPhone     String
+  parentAddress   String
+  entryYear       Int
+  currentClass    String
+  dormitory       String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  waliSantri      WaliSantri[]
+  pocketMoney     PocketMoney?
+  savings         Savings?
+  attendance      Attendance[]
+  reportCards     ReportCard[]
+  libraryLoans    LibraryLoan[]
+  achievements    Achievement[]
+  infaqDonations  InfaqDonation[]
+  bills           Bill[]
+  payments        Payment[]
+
+  @@map("santri")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+// Wali Santri (Parent/Guardian)
+model WaliSantri {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  name        String
+  phone       String   @unique
+  email       String?
+  address     String
+  relation    String   // Father, Mother, Guardian
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  santri      Santri[] @relation("WaliSantriSantri")
+
+  @@map("wali_santri")
+}
+
+// Admin/Staff Management
+model Admin {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  name        String
+  position    String
+  department  String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admins")
+}
+
+// Finance Management
+model Finance {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  name        String
+  position    String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("finance")
+}
+
+// Super Admin Management
+model SuperAdmin {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  name        String
+  foundation  String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("super_admins")
+}
+
+// Pocket Money Management
+model PocketMoney {
+  id          String   @id @default(cuid())
+  santriId    String   @unique
+  balance     Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  transactions PocketMoneyTransaction[]
+
+  @@map("pocket_money")
+}
+
+model PocketMoneyTransaction {
+  id          String   @id @default(cuid())
+  pocketMoneyId String
+  type        TransactionType
+  amount      Decimal  @db.Decimal(10, 2)
+  description String
+  reference   String?  // Payment gateway reference
+  status      TransactionStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  pocketMoney PocketMoney @relation(fields: [pocketMoneyId], references: [id], onDelete: Cascade)
+
+  @@map("pocket_money_transactions")
+}
+
+enum TransactionType {
+  TOP_UP
+  WITHDRAWAL
+  TRANSFER
+  PAYMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// Savings Management
+model Savings {
+  id          String   @id @default(cuid())
+  santriId    String   @unique
+  balance     Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  transactions SavingsTransaction[]
+
+  @@map("savings")
+}
+
+model SavingsTransaction {
+  id          String   @id @default(cuid())
+  savingsId   String
+  type        TransactionType
+  amount      Decimal  @db.Decimal(10, 2)
+  description String
+  status      TransactionStatus @default(SUCCESS)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  savings     Savings  @relation(fields: [savingsId], references: [id], onDelete: Cascade)
+
+  @@map("savings_transactions")
+}
+
+// Bills & Installments
+model Bill {
+  id          String   @id @default(cuid())
+  santriId    String
+  type        BillType
+  amount      Decimal  @db.Decimal(10, 2)
+  dueDate     Date
+  description String
+  isPaid      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  payments    Payment[]
+
+  @@map("bills")
+}
+
+enum BillType {
+  TUITION
+  DORMITORY
+  MEAL
+  ACTIVITY
+  OTHER
+}
+
+// Payment Management
+model Payment {
+  id          String   @id @default(cuid())
+  santriId    String
+  billId      String?
+  amount      Decimal  @db.Decimal(10, 2)
+  method      PaymentMethod
+  reference   String   @unique
+  status      PaymentStatus @default(PENDING)
+  gatewayResponse Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  bill        Bill?    @relation(fields: [billId], references: [id])
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  E_WALLET
+  CREDIT_CARD
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+// Attendance Management
+model Attendance {
+  id          String   @id @default(cuid())
+  santriId    String
+  date        Date
+  type        AttendanceType
+  status      AttendanceStatus
+  notes       String?
+  recordedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@unique([santriId, date, type])
+  @@map("attendance")
+}
+
+enum AttendanceType {
+  CLASS
+  PRAYER
+  ACTIVITY
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  SICK
+  PERMISSION
+}
+
+// Academic Management
+model ReportCard {
+  id          String   @id @default(cuid())
+  santriId    String
+  semester    Int
+  academicYear String
+  subjects    Json     // Array of subject grades
+  average     Decimal  @db.Decimal(4, 2)
+  rank        Int?
+  notes       String?
+  fileUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@unique([santriId, semester, academicYear])
+  @@map("report_cards")
+}
+
+// Library Management
+model LibraryBook {
+  id          String   @id @default(cuid())
+  title       String
+  author      String
+  isbn        String?  @unique
+  category    String
+  quantity    Int      @default(1)
+  available   Int      @default(1)
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  loans       LibraryLoan[]
+
+  @@map("library_books")
+}
+
+model LibraryLoan {
+  id          String   @id @default(cuid())
+  santriId    String
+  bookId      String
+  borrowedAt  DateTime @default(now())
+  dueDate     DateTime
+  returnedAt  DateTime?
+  fine        Decimal  @default(0) @db.Decimal(10, 2)
+  status      LoanStatus @default(BORROWED)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri       @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  book        LibraryBook  @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@map("library_loans")
+}
+
+enum LoanStatus {
+  BORROWED
+  RETURNED
+  OVERDUE
+}
+
+// Achievement Management (CPS)
+model Achievement {
+  id          String   @id @default(cuid())
+  santriId    String
+  title       String
+  category    AchievementCategory
+  level       AchievementLevel
+  description String?
+  date        Date
+  certificate String?  // File URL
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@map("achievements")
+}
+
+enum AchievementCategory {
+  ACADEMIC
+  RELIGIOUS
+  SPORTS
+  ARTS
+  LEADERSHIP
+  OTHER
+}
+
+enum AchievementLevel {
+  SCHOOL
+  DISTRICT
+  PROVINCE
+  NATIONAL
+  INTERNATIONAL
+}
+
+// Infaq Management
+model InfaqDonation {
+  id          String   @id @default(cuid())
+  santriId    String
+  amount      Decimal  @db.Decimal(10, 2)
+  purpose     String?
+  anonymous   Boolean  @default(false)
+  paymentMethod PaymentMethod
+  reference   String   @unique
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  santri      Santri   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@map("infaq_donations")
+}
+
+// Announcements
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  type        AnnouncementType
+  priority    Priority @default(NORMAL)
+  targetRoles UserRole[]
+  isActive    Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  notifications Notification[]
+
+  @@map("announcements")
+}
+
+enum AnnouncementType {
+  GENERAL
+  ACADEMIC
+  FINANCIAL
+  RELIGIOUS
+  ACTIVITY
+  EMERGENCY
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// Notifications
+model Notification {
+  id             String   @id @default(cuid())
+  userId         String
+  announcementId String?
+  title          String
+  message        String
+  type           NotificationType
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  announcement   Announcement? @relation(fields: [announcementId], references: [id])
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  PAYMENT
+  ATTENDANCE
+  ACADEMIC
+  SYSTEM
+}
+
+// Feedback System
+model Feedback {
+  id          String   @id @default(cuid())
+  userId      String
+  type        FeedbackType
+  subject     String
+  message     String
+  status      FeedbackStatus @default(OPEN)
+  response    String?
+  respondedBy String?
+  respondedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("feedback")
+}
+
+enum FeedbackType {
+  SUGGESTION
+  COMPLAINT
+  QUESTION
+  APPRECIATION
+}
+
+enum FeedbackStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// Audit Trail
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String
+  table       String
+  recordId    String
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
+
+// OTP Management
+model OTP {
+  id          String   @id @default(cuid())
+  phone       String
+  code        String
+  type        OTPType
+  expiresAt   DateTime
+  isUsed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("otps")
+}
+
+enum OTPType {
+  LOGIN
+  REGISTRATION
+  PASSWORD_RESET
+  PAYMENT_VERIFICATION
+}
