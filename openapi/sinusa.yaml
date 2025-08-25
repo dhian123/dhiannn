@@ -1,0 +1,667 @@
+openapi: 3.0.3
+info:
+  title: SiNusa API
+  version: 0.1.0
+  description: Initial contract for SiNusa mobile + admin backend
+servers:
+  - url: https://api.silabs.sch.id/v1
+    description: Production (placeholder)
+  - url: https://staging.api.silabs.sch.id/v1
+    description: Staging (placeholder)
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Wallet
+  - name: Bills
+  - name: Payments
+  - name: Attendance
+  - name: Academics
+  - name: Savings
+  - name: Infaq
+  - name: Content
+  - name: Admin
+
+paths:
+  /auth/otp/request:
+    post:
+      tags: [Auth]
+      summary: Request OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone:
+                  type: string
+                  example: "+6281234567890"
+              required: [phone]
+      responses:
+        '204':
+          description: OTP sent
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify OTP and issue tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone:
+                  type: string
+                code:
+                  type: string
+                deviceFingerprint:
+                  type: string
+              required: [phone, code, deviceFingerprint]
+      responses:
+        '200':
+          description: Tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /wallet:
+    get:
+      tags: [Wallet]
+      summary: Get wallet balance
+      responses:
+        '200':
+          description: Balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletBalance'
+
+  /wallet/transactions:
+    get:
+      tags: [Wallet]
+      summary: List wallet transactions
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LedgerEntry'
+                  nextCursor:
+                    type: string
+
+  /wallet/topups:
+    post:
+      tags: [Wallet]
+      summary: Create wallet top-up intent
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopupRequest'
+      responses:
+        '201':
+          description: Created top-up intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntent'
+        '409':
+          description: Duplicate idempotency key
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /payments/webhooks/{provider}:
+    post:
+      tags: [Payments]
+      summary: Receive payment gateway webhooks
+      security:
+        - webhookSignature: []
+      parameters:
+        - in: path
+          name: provider
+          schema:
+            type: string
+            enum: [xendit, midtrans]
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentWebhookEvent'
+      responses:
+        '204':
+          description: Acknowledged
+
+  /bills:
+    get:
+      tags: [Bills]
+      summary: List bills for current santri or dependents
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, partial, paid, overdue]
+        - in: query
+          name: days
+          schema:
+            type: integer
+            default: 60
+      responses:
+        '200':
+          description: Bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bill'
+
+  /bills/{billId}/pay-intents:
+    post:
+      tags: [Bills]
+      summary: Create payment intent for a bill
+      parameters:
+        - in: path
+          name: billId
+          schema:
+            type: string
+          required: true
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  type: string
+                  enum: [va_bca, qris, cards]
+              required: [channel]
+      responses:
+        '201':
+          description: Payment intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntent'
+
+  /attendance:
+    get:
+      tags: [Attendance]
+      summary: Get attendance records (self or child)
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Attendance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceRecord'
+
+  /report-cards:
+    get:
+      tags: [Academics]
+      summary: List report cards
+      responses:
+        '200':
+          description: Report cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportCardSummary'
+
+  /report-cards/{id}/download:
+    get:
+      tags: [Academics]
+      summary: Get presigned URL to download report card PDF
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+
+  /savings:
+    get:
+      tags: [Savings]
+      summary: Get savings account summary and recent transactions
+      responses:
+        '200':
+          description: Savings data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account:
+                    $ref: '#/components/schemas/SavingsAccount'
+                  transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavingsTransaction'
+
+  /infaq/donations:
+    post:
+      tags: [Infaq]
+      summary: Create infaq donation intent
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  minimum: 1000
+                channel:
+                  type: string
+                  enum: [qris, va_bca, va_bni]
+              required: [amount, channel]
+      responses:
+        '201':
+          description: Donation intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntent'
+
+  /announcements:
+    get:
+      tags: [Content]
+      summary: List announcements
+      parameters:
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Announcement'
+
+  /feedback:
+    post:
+      tags: [Content]
+      summary: Submit feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '201':
+          description: Created
+
+  /admin/santri:
+    post:
+      tags: [Admin]
+      summary: Create santri
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SantriCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Santri'
+
+  /admin/report-cards:
+    post:
+      tags: [Admin]
+      summary: Upload report card PDF
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                santriId:
+                  type: string
+                term:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+              required: [santriId, term, file]
+      responses:
+        '201':
+          description: Uploaded
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Signature
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+      description: Unique key to make the request idempotent (valid ≥ 24 hours)
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        traceId:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+
+    WalletBalance:
+      type: object
+      properties:
+        accountId:
+          type: string
+        balance:
+          type: integer
+        currency:
+          type: string
+          example: IDR
+        updatedAt:
+          type: string
+          format: date-time
+
+    LedgerEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        journalId:
+          type: string
+        direction:
+          type: string
+          enum: [debit, credit]
+        amount:
+          type: integer
+        currency:
+          type: string
+        description:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+
+    TopupRequest:
+      type: object
+      properties:
+        amount:
+          type: integer
+          minimum: 1000
+        channel:
+          type: string
+          enum: [qris, va_bca, va_bni, cards]
+      required: [amount, channel]
+
+    PaymentIntent:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        status:
+          type: string
+          enum: [requires_action, pending, succeeded, failed, expired]
+        channel:
+          type: string
+        reference:
+          type: string
+        redirectUrl:
+          type: string
+
+    PaymentWebhookEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        event:
+          type: string
+        data:
+          type: object
+
+    Bill:
+      type: object
+      properties:
+        id:
+          type: string
+        santriId:
+          type: string
+        title:
+          type: string
+        amount:
+          type: integer
+        dueDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [pending, partial, paid, overdue]
+
+    AttendanceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        santriId:
+          type: string
+        date:
+          type: string
+          format: date
+        session:
+          type: string
+          example: class_morning
+        status:
+          type: string
+          enum: [present, absent, excused, late]
+
+    ReportCardSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        santriId:
+          type: string
+        term:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+
+    SavingsAccount:
+      type: object
+      properties:
+        id:
+          type: string
+        santriId:
+          type: string
+        balance:
+          type: integer
+
+    SavingsTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+        savingsAccountId:
+          type: string
+        type:
+          type: string
+          enum: [deposit, withdrawal]
+        amount:
+          type: integer
+        occurredAt:
+          type: string
+          format: date-time
+
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+
+    FeedbackRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [critique, suggestion]
+        message:
+          type: string
+      required: [type, message]
+
+    SantriCreateRequest:
+      type: object
+      properties:
+        nis:
+          type: string
+        name:
+          type: string
+        waliId:
+          type: string
+        classId:
+          type: string
+      required: [nis, name]
+
+    Santri:
+      type: object
+      properties:
+        id:
+          type: string
+        nis:
+          type: string
+        name:
+          type: string
+        waliId:
+          type: string
+        classId:
+          type: string
+
