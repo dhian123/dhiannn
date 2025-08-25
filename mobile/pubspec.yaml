@@ -1,0 +1,105 @@
+name: sinusa_mobile
+description: SiNusa - Santri & Wali Santri Information System Mobile App
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI & Navigation
+  cupertino_icons: ^1.0.6
+  go_router: ^12.1.3
+  flutter_bloc: ^8.1.3
+  
+  # Network & API
+  dio: ^5.4.0
+  retrofit: ^4.0.3
+  json_annotation: ^4.8.1
+  
+  # Local Storage & Offline
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.0
+  shared_preferences: ^2.2.2
+  
+  # Authentication & Security
+  local_auth: ^2.1.7
+  crypto: ^3.0.3
+  encrypt: ^5.0.3
+  
+  # State Management & Dependency Injection
+  get_it: ^7.6.4
+  injectable: ^2.3.2
+  equatable: ^2.0.5
+  
+  # Utilities
+  intl: ^0.18.1
+  uuid: ^4.2.1
+  logger: ^2.0.2+1
+  connectivity_plus: ^5.0.2
+  permission_handler: ^11.1.0
+  
+  # UI Components
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+  pull_to_refresh: ^2.0.0
+  
+  # Payment & QR
+  qr_flutter: ^4.1.0
+  qr_code_scanner: ^1.0.1
+  
+  # File Handling
+  file_picker: ^6.1.1
+  path_provider: ^2.1.1
+  
+  # Notifications
+  flutter_local_notifications: ^16.3.0
+  firebase_messaging: ^14.7.9
+  
+  # Firebase (for notifications and analytics)
+  firebase_core: ^2.24.2
+  firebase_analytics: ^10.7.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  # Code Generation
+  build_runner: ^2.4.7
+  retrofit_generator: ^8.0.4
+  json_serializable: ^6.7.1
+  hive_generator: ^2.0.1
+  injectable_generator: ^2.4.1
+  
+  # Linting
+  flutter_lints: ^3.0.1
+  
+  # Testing
+  mockito: ^5.4.4
+  bloc_test: ^9.1.5
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/fonts/
+  
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
